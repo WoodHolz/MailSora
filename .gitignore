@@ -1,1 +1,3 @@
-Tests/
+.gitignore
+tests/
+credentials.json
