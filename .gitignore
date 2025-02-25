@@ -2,3 +2,6 @@
 tests/
 credentials.json
 token.json
+user_credentials.json
+.vscode
+temp/
