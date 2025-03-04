@@ -217,14 +217,15 @@ def read_message(service, user_id, msg_id):
     print("="*55)
 
 
+# TODO 
+from ..utils.clean_duplicate_mails import delete_duplicate_mails
 
-
-
-def main():
+def test():
     # TODO for multiple users
 
     # TEST 
     user_id = "me"
+    # query = "newer_than:1d"
     query = "eCHO"
 
 
@@ -247,9 +248,14 @@ def main():
         for message in results:
             read_message(service, user_id, message)
 
+        delete_duplicate_mails(fetcher_temp_path)
+
+
     except HttpError as error:
         # TODO(developer) - Handle errors from gmail API.
         print(f"An error occurred: {error}")
 
+
+
 if __name__ == "__main__":
-    main()
+    test()
