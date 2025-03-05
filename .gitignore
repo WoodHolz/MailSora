@@ -5,3 +5,4 @@ token.json
 user_credentials.json
 .vscode
 temp/
+__pycache__
