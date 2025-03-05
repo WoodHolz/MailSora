@@ -45,8 +45,8 @@ class State(TypedDict):
     context: list
     answer: str
 
-def retrieve(state: State, k: int = 4):
-    retrieved_docs = vector_store.similarity_search(state["question"], k=k)
+def retrieve(state: State):
+    retrieved_docs = vector_store.similarity_search(state["question"], k = 20)
     return {"context": retrieved_docs}
 
 def generate(state: State):
@@ -60,5 +60,5 @@ graph_builder = StateGraph(State).add_sequence([retrieve, generate])
 graph_builder.add_edge(START, "retrieve")
 graph = graph_builder.compile()
 
-response = graph.invoke({"question": "Draft a podcast script based on the content.", "k": 20})
+response = graph.invoke({"question": "Draft a podcast script based on the content."})
 print(response["answer"])
