@@ -6,36 +6,52 @@ import getpass
 # There are 2 methods to load html file. For details, please see https://python.langchain.com/docs/integrations/document_loaders/
 from langchain_community.document_loaders import UnstructuredHTMLLoader
 # from langchain_community.document_loaders import BSHTMLLoader
+# from langchain_community.document_loaders import MHTMLLoader
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from typing_extensions import List, TypedDict
+from typing_extensions import TypedDict
 
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+#embeddings = OllamaEmbeddings(model="nomic-embed-text")
 # local_llm = OllamaLLM(model="llama3.2", temperature=0.6)
-# local_llm = OllamaLLM(model="llama3.2")
-local_llm = OllamaLLM(model="deepseek-r1:1.5b")
+local_llm = OllamaLLM(model="llama3.2")
+# local_llm = OllamaLLM(model="deepscaler")
+# local_llm = OllamaLLM(model="openthinker")
+# local_llm = OllamaLLM(model="qwen2.5:0.5b")
+# local_llm = OllamaLLM(model="deepseek-r1:1.5b")
 
+from langchain_deepseek import ChatDeepSeek
+if not os.environ.get("DEEPSEEK_API_KEY"):
+    os.environ["DEEPSEEK_API_KEY"] = getpass.getpass("Enter API key for Deepseek: ")
 
-# from langchain_community.vectorstores import FAISS
-
-# from langchain_chroma import Chroma
-# vector_store = Chroma(embedding_function=embeddings)
-
-from langchain_core.vectorstores import InMemoryVectorStore
-vector_store = InMemoryVectorStore(embeddings)
+llm = ChatDeepSeek(
+    model="deepseek-chat",
+    temperature=0,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+    # other params..
+)
 
 from langchain import hub
 
+from langsmith import traceable
+
 from langgraph.graph import START, StateGraph
 
+from bs4 import BeautifulSoup
 
 # 获取当前文件所在目录
 current_dir = os.path.dirname(__file__)
 
+# path of temp_dir
+tmp_dir = os.path.join(current_dir, "..", "..", "temp")
+
 # 构建mails目录的完整路径
-base_dir = os.path.join(current_dir, "..", "..", "temp", "mails")
+base_dir = os.path.join(tmp_dir, "mails")
+
+podcast_path = os.path.join(current_dir, "..", "podcast_generator")
 
 def load_page_content(email_dir):
     html_files = [f for f in os.listdir(email_dir) if f.endswith('.html')]
@@ -49,15 +65,24 @@ def load_page_content(email_dir):
 
     documents = loader.load()
 
-    content = Document(documents[0].page_content)
+    subject = os.path.basename(email_dir)
 
+    # print("tile:", subject)
+    # tests
+    # print(50*'*')
+    # for doc in documents:
+    #     print(doc)
+    # print(50*'*')
+
+    content = Document(page_content=documents[0].page_content, metadata={"subject": subject})
+    # content = Document(page_content=documents[0].page_content)
+    
     # test
     # print(50*'*')
     # print(content)
     # print(50*'*')
 
     return content
-    
 
 
 def load_all_page_content(base_dir):
@@ -79,67 +104,67 @@ def load_all_page_content(base_dir):
         if content:
             all_content.append(content)
             
+    # print(50*'+')
+    # print(all_content)
+    # print(50*'+')
     return all_content
     
-
-
 all_mail_content = load_all_page_content(base_dir)
 
+from langchain_core.prompts import PromptTemplate
 
-# text_splitter = RecursiveCharacterTextSplitter(
-#     chunk_size = 1000,  # chunk size (characters)
-#     chunk_overlap = 200,  # chunk overlap (characters)
-#     add_start_index = True,  # track index in original document
-# )
+prompt_template = """Generate a detailed podcast script in English based on the provided email content and topic. 
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1500,        # 邮件通常比普通文本更短，适当增大块大小
-    chunk_overlap=200,      # 适当的重叠以保持上下文
-    separators=["\n\n", "\n", " ", ""],  # 按换行、空格优先拆分
-    add_start_index=True    # 记录原始位置
-)
+Instructions:
+1. Follow the specified format.
+2. Return only the final script without any thought process or additional commentary.
+3. Ensure the script contains only clear, natural English text, avoiding special characters, mixed languages, or hard-to-pronounce words.
 
-all_splits = text_splitter.split_documents(all_mail_content)
 
-# test_split
-# print(f"Split blog post into {len(all_splits)} sub-documents.")
-# for split in all_splits:
-#     print(split)
+Email Content:
+{context}
 
-# vector_store = FAISS.from_documents(all_splits, embeddings)
-# Index chunks
-document_ids = vector_store.add_documents(documents=all_splits) 
+Topic:
+{question}
 
-# test_vector_storing
-# print(document_ids[:3])
+Podcast Script:
+"""
 
-prompt = hub.pull("rlm/rag-prompt")
+
+prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
 
 class State(TypedDict):
     question: str
-    context: List[Document]
     answer: str
 
-def retrieve(state: State):
-    retrieved_docs = vector_store.similarity_search(state["question"])
-    return {"context": retrieved_docs}
+@traceable
+def generate(state: State, **kwargs):
+    docs_content = "\n\n".join(doc.page_content for doc in all_mail_content)
+    messages = {"context": docs_content, "question": state["question"]}
+    # response = llm.invoke(prompt.format(**messages))
+    response = local_llm.invoke(prompt.format(**messages))
 
-
-def generate(state: State):
-    docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-    messages = prompt.invoke({"question": state["question"], "context": docs_content})
-    response = local_llm.invoke(messages)
     return {"answer": response}
+    # response = local_llm.invoke(messages)
+    # translation_prompt = f"Translate the following English podcast script into fluent Chinese:\n\n{response}"
+    # chinese_script = local_llm.invoke(translation_prompt)
+    # return {"answer": chinese_script}
 
-# Compile application and test
-graph_builder = StateGraph(State).add_sequence([retrieve, generate])
-graph_builder.add_edge(START, "retrieve")
+graph_builder = StateGraph(State).add_sequence([generate])
+graph_builder.add_edge(START, "generate")
 graph = graph_builder.compile()
 
-# response = graph.invoke({"question": "Summarize and then use the summary to draft a podcast script."})
-# response = graph.invoke({"question": "Summarize the content"})
-# response = graph.invoke({"question": "Use the content to draft a podcast script."})
-response = graph.invoke({"question": "Draft a podcast script based on the content."})
+response = graph.invoke({"question": "news, tech blogs, Job alerts"})
 print(response["answer"])
 
+def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.txt")):
+    if os.path.exists(file_path):
+        print(f"File '{file_path}' already exists, overwriting previous content...")
+    if not isinstance(script, str):
+        script = script.content
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(script)
+    print(f"Script saved to {file_path}")
+
+save_script(response["answer"])
 
