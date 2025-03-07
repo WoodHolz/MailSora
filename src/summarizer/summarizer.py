@@ -15,8 +15,8 @@ from typing_extensions import TypedDict
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
 #embeddings = OllamaEmbeddings(model="nomic-embed-text")
 # local_llm = OllamaLLM(model="llama3.2", temperature=0.6)
-local_llm = OllamaLLM(model="llama3.2")
-# local_llm = OllamaLLM(model="deepscaler")
+# local_llm = OllamaLLM(model="llama3.2")
+local_llm = OllamaLLM(model="deepscaler")
 # local_llm = OllamaLLM(model="openthinker")
 # local_llm = OllamaLLM(model="qwen2.5:0.5b")
 # local_llm = OllamaLLM(model="deepseek-r1:1.5b")
@@ -31,6 +31,7 @@ llm = ChatDeepSeek(
     max_tokens=None,
     timeout=None,
     max_retries=2,
+    streaming=True
     # other params..
 )
 
@@ -118,43 +119,43 @@ prompt_template = """Generate a detailed podcast script in English based on the 
 Instructions:
 1. Follow the specified format.
 2. Return only the final script without any thought process or additional commentary.
-3. Ensure the script contains only clear, natural English text, avoiding special characters, mixed languages, or hard-to-pronounce words.
+3. Add appropriate pause markers like blank.
+4. Ensure the script contains only clear, natural English text, avoiding special characters, mixed languages, or hard-to-pronounce words.
 
 
 Email Content:
 {context}
 
 Topic:
-{question}
+{topic}
 
 Podcast Script:
 """
 
 
-prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+prompt = PromptTemplate(template=prompt_template, input_variables=["context", "topic"])
 
 class State(TypedDict):
-    question: str
+    topic: str
     answer: str
 
-@traceable
+# @traceable
 def generate(state: State, **kwargs):
     docs_content = "\n\n".join(doc.page_content for doc in all_mail_content)
-    messages = {"context": docs_content, "question": state["question"]}
-    # response = llm.invoke(prompt.format(**messages))
-    response = local_llm.invoke(prompt.format(**messages))
+    messages = {"context": docs_content, "topic": state["topic"]}
+    response = llm.invoke(prompt.format(**messages))
 
     return {"answer": response}
     # response = local_llm.invoke(messages)
-    # translation_prompt = f"Translate the following English podcast script into fluent Chinese:\n\n{response}"
-    # chinese_script = local_llm.invoke(translation_prompt)
+    # translation_prompt = f"You are a translator.\nInstructions: Return only the final content without any thought process or additional commentary.\nTranslate the following English podcast script into fluent Chinese:\n\n{response}"
+    # chinese_script = llm.invoke(translation_prompt)
     # return {"answer": chinese_script}
 
 graph_builder = StateGraph(State).add_sequence([generate])
 graph_builder.add_edge(START, "generate")
 graph = graph_builder.compile()
 
-response = graph.invoke({"question": "news, tech blogs, Job alerts"})
+response = graph.invoke({"topic": "news, tech blogs, Job alerts"})
 print(response["answer"])
 
 def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.txt")):
@@ -167,4 +168,3 @@ def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.tx
     print(f"Script saved to {file_path}")
 
 save_script(response["answer"])
-
