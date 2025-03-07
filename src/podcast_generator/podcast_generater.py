@@ -20,12 +20,23 @@ podcast_path = os.path.join(current_dir, "..", "podcast_generator")
 # print(TTS().list_models())
 
 MODEL_NAME = "tts_models/en/ljspeech/glow-tts"
+VOCODER_NAME = "vocoder_models/en/ljspeech/univnet"
 
 # Initialize TTS with the target model name
 # tts = TTS(MODEL_NAME).to(device)
 
 # Run TTS
 # tts.tts_to_file(file_path="test.wav", text="Hello world!")
+import re
+
+def clean_script(text):
+    # 删除方括号内容（音乐提示）
+    text = re.sub(r'\[.*?\]', '', text)
+    # 删除**角色标记**
+    text = re.sub(r'\*\*.*?:\*\*', '', text)
+    # 将[Pause]转换为静音标识（需TTS支持）
+    text = re.sub(r'\[Pause\]', '<SILENCE 1s>', text)
+    return text
 
 def load_script(file_path):
     """读取播客文稿"""
@@ -33,16 +44,20 @@ def load_script(file_path):
         print(f"Error: Transcript file '{file_path}' not found!")
         return "GG, script not found!"
     with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-        content = content.replace("-", "")
-
+        content = clean_script(f.read())
+        # content = content.replace("-", "")
         return content
 
 def text_to_speech(text, output_filename):
-    tts = TTS(model_name=MODEL_NAME, gpu=False).to(device)
+    tts = TTS(model_name=MODEL_NAME, vocoder_name=VOCODER_NAME, gpu=False).to(device)
+    # tts = TTS(model_name=MODEL_NAME, vocoder_name=VOCODER_NAME, gpu=False).to(device)
     tts.tts_to_file(text=text, file_path=output_filename)
     print(f"Generated WAV file: {output_filename}")
 
-script = load_script(os.path.join(podcast_path, "podcast_script.txt"))
 
-text_to_speech(script, os.path.join(tmp_dir, "test.wav"))
+def test():
+    script = load_script(os.path.join(podcast_path, "podcast_script.txt"))
+    text_to_speech(script, os.path.join(tmp_dir, "test.wav"))
+
+if __name__ == "__main__":
+    test()
