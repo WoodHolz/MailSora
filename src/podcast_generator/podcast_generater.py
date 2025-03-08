@@ -55,9 +55,9 @@ def text_to_speech(text, output_filename):
     print(f"Generated WAV file: {output_filename}")
 
 
-def test():
+def gen_podcast():
     script = load_script(os.path.join(podcast_path, "podcast_script.txt"))
     text_to_speech(script, os.path.join(tmp_dir, "test.wav"))
 
 if __name__ == "__main__":
-    test()
+    gen_podcast()

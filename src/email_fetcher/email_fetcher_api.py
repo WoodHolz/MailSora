@@ -135,7 +135,8 @@ def parse_parts(service, user_id, parts, folder_name, message):
             elif mimeType == "text/html":
                 if not filename:
                     # creat dir for every html
-                    filename = "index.html"
+                    # filename = "index.html"
+                    filename = folder_name + ".html"
                     filepath = os.path.join(fetcher_temp_path, folder_name, filename)
                     print("Saving HTML to", filepath)
                     with open(filepath, "wb+") as f:
@@ -220,17 +221,18 @@ def read_message(service, user_id, msg_id):
 # TODO 
 from ..utils.clean_duplicate_mails import delete_duplicate_mails
 
-def test():
+def gmail_fetch(user_id, query, service=None):
     # TODO for multiple users
 
     # TEST 
-    user_id = "me"
+    # user_id = "me"
     # query = "newer_than:1d"
-    query = "eCHO"
+    # query = "eCHO"
 
 
     try:
-        service = authenticate()
+        if service is None:
+            service = authenticate()
 
         # # Call the Gmail API
         # results = service.users().labels().list(userId = user_id).execute()
@@ -258,4 +260,4 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    gmail_fetch(user_id="me", query='("job alert" OR "medium" OR "联合早报" OR "eCHO") newer_than:3d')

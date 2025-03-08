@@ -168,3 +168,11 @@ def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.tx
     print(f"Script saved to {file_path}")
 
 save_script(response["answer"])
+
+def run_summarizer(topic):
+    response = graph.invoke({"topic": topic})
+    save_script(response["answer"])
+    return response["answer"]
+
+if __name__ == "__main__":
+    run_summarizer(topic="news, tech blogs, Job alerts")
