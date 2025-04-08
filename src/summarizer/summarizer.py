@@ -114,13 +114,15 @@ all_mail_content = load_all_page_content(base_dir)
 
 from langchain_core.prompts import PromptTemplate
 
-prompt_template = """Generate a detailed podcast script in English based on the provided email content and topic. 
+prompt_template = """Generate a detailed podcast script in English for two hosts (Host 1 and Host 2) based on the provided email content and topic.
 
 Instructions:
-1. Follow the specified format.
-2. Return only the final script without any thought process or additional commentary.
-3. Add appropriate pause markers like blank.
-4. Ensure the script contains only clear, natural English text, avoiding special characters, mixed languages, or hard-to-pronounce words.
+1. The script should be a dialogue between Host 1 and Host 2. Assign lines clearly (e.g., "Host 1:", "Host 2:").
+2. Follow the specified format.
+3. Return only the final script without any thought process or additional commentary.
+4. Add appropriate pause markers like `[Pause]` or blank lines between speaker turns or significant topic shifts.
+5. Ensure the script contains only clear, natural English text, avoiding special characters, mixed languages, or hard-to-pronounce words.
+6. Make the conversation engaging and natural-sounding.
 
 
 Email Content:
