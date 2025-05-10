@@ -43,6 +43,8 @@ from langgraph.graph import START, StateGraph
 
 from bs4 import BeautifulSoup
 
+from langchain_core.prompts import PromptTemplate
+
 # 获取当前文件所在目录
 current_dir = os.path.dirname(__file__)
 
@@ -88,32 +90,35 @@ def load_page_content(email_dir):
 
 def load_all_page_content(base_dir):
     all_content = []
+    print(f"\nChecking directory: {base_dir}")
     # 确保目录存在
     if not os.path.exists(base_dir):
         print(f"Directory {base_dir} does not exist")
         return all_content
         
     # 遍历每个邮件目录
-    for email_dir in os.listdir(base_dir):
+    dir_items = os.listdir(base_dir)
+    print(f"Found {len(dir_items)} items in directory")
+    
+    for email_dir in dir_items:
         full_path = os.path.join(base_dir, email_dir)
         
         # 只处理目录
         if not os.path.isdir(full_path):
+            print(f"Skipping non-directory: {email_dir}")
             continue
             
+        print(f"Processing directory: {email_dir}")
         content = load_page_content(full_path)
         if content:
             all_content.append(content)
+            print(f"Added content from: {email_dir}")
+        else:
+            print(f"No content found in: {email_dir}")
             
-    # print(50*'+')
-    # print(all_content)
-    # print(50*'+')
+    print(f"Total content items found: {len(all_content)}")
     return all_content
     
-all_mail_content = load_all_page_content(base_dir)
-
-from langchain_core.prompts import PromptTemplate
-
 prompt_template = """Generate a detailed podcast script in English for two hosts (Host 1 and Host 2) based on the provided email content and topic.
 
 Instructions:
@@ -140,25 +145,41 @@ prompt = PromptTemplate(template=prompt_template, input_variables=["context", "t
 class State(TypedDict):
     topic: str
     answer: str
+    content: list
 
-# @traceable
-def generate(state: State, **kwargs):
-    docs_content = "\n\n".join(doc.page_content for doc in all_mail_content)
-    messages = {"context": docs_content, "topic": state["topic"]}
-    response = llm.invoke(prompt.format(**messages))
+def run_summarizer(topic):
+    print("\nStarting summarization process...")
+    # Load content here instead of at module level
+    all_mail_content = load_all_page_content(base_dir)
+    
+    if not all_mail_content:
+        print("No email content found to summarize!")
+        return None
+    
+    print(f"Found {len(all_mail_content)} emails to process")
+    
+    # Create graph with content
+    def generate(state: State, **kwargs):
+        print("Generating content from emails...")
+        docs_content = "\n\n".join(doc.page_content for doc in all_mail_content)
+        messages = {"context": docs_content, "topic": state["topic"]}
+        print("Calling LLM for summary generation...")
+        response = llm.invoke(prompt.format(**messages))
+        return {"answer": response.content if hasattr(response, 'content') else str(response)}
 
-    return {"answer": response}
-    # response = local_llm.invoke(messages)
-    # translation_prompt = f"You are a translator.\nInstructions: Return only the final content without any thought process or additional commentary.\nTranslate the following English podcast script into fluent Chinese:\n\n{response}"
-    # chinese_script = llm.invoke(translation_prompt)
-    # return {"answer": chinese_script}
-
-graph_builder = StateGraph(State).add_sequence([generate])
-graph_builder.add_edge(START, "generate")
-graph = graph_builder.compile()
-
-response = graph.invoke({"topic": "news, tech blogs, Job alerts"})
-print(response["answer"])
+    graph_builder = StateGraph(State).add_sequence([generate])
+    graph_builder.add_edge(START, "generate")
+    graph = graph_builder.compile()
+    
+    print("Running graph to generate summary...")
+    response = graph.invoke({"topic": topic})
+    print("Summary generation completed!")
+    
+    script = response["answer"]
+    save_script(script)
+    print("Script saved successfully!")
+    
+    return script
 
 def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.txt")):
     if os.path.exists(file_path):
@@ -168,13 +189,6 @@ def save_script(script, file_path= os.path.join(podcast_path, "podcast_script.tx
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(script)
     print(f"Script saved to {file_path}")
-
-save_script(response["answer"])
-
-def run_summarizer(topic):
-    response = graph.invoke({"topic": topic})
-    save_script(response["answer"])
-    return response["answer"]
 
 if __name__ == "__main__":
     run_summarizer(topic="news, tech blogs, Job alerts")
