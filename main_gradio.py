@@ -77,7 +77,7 @@ def run_pipeline(user_id_input: str, query_input: str, topic_input: str):
 
         # 添加邮件分类步骤
         status_messages.append("\nStarting email classification...")
-        classification_result, _ = display_sorted_emails()
+        classification_result, classification_stats = display_sorted_emails()  # 获取分类结果和统计
         status_messages.append("Email classification completed!")
         status_messages.append("\n分类结果：")
         status_messages.append(classification_result)
@@ -134,12 +134,13 @@ def run_pipeline(user_id_input: str, query_input: str, topic_input: str):
         # Return the results
         result = "\n".join(status_messages)
         
-        return result, output_audio_path, script_content
+        # 返回所有需要的值：状态、音频、脚本内容、分类结果、分类统计
+        return result, output_audio_path, script_content, classification_result, classification_stats
             
     except Exception as e:
         error_msg = f"Error during processing: {str(e)}"
         print(error_msg)  # 打印错误信息以便调试
-        return error_msg, None, None
+        return error_msg, None, None, None, None
 
 # Create a simplified version of the Gradio interface
 with gr.Blocks(title="Email to Podcast Generator") as demo:
@@ -193,14 +194,20 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
         outputs=[classification_output, stats_output]
     )
     
+    # 更新 run_btn 的点击事件，添加对分类结果的更新
     run_btn.click(
         fn=run_pipeline,
         inputs=[user_id, query, topic],
-        outputs=[status_output, audio_output, script_output]
+        outputs=[
+            status_output,      # 状态输出
+            audio_output,       # 音频输出
+            script_output,      # 脚本输出
+            classification_output,  # 分类结果
+            stats_output        # 分类统计
+        ]
     )
 
 if __name__ == "__main__":
-    # main() # We'll launch the Gradio app instead
     try:
         demo.launch(share=False)
     except Exception as e:
@@ -210,7 +217,7 @@ if __name__ == "__main__":
             simple_interface = gr.Interface(
                 fn=run_pipeline,
                 inputs=["text", "text", "text"],
-                outputs=["text", "audio", "text"],
+                outputs=["text", "audio", "text", "text", "json"],
                 title="Email to Podcast Generator (Simple Mode)"
             )
             simple_interface.launch(share=False)
