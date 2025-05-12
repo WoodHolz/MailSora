@@ -1,12 +1,13 @@
 import os
 from time import sleep
 from typing import Tuple, Optional, Dict, List
-from src.email_fetcher.email_fetcher_api import gmail_fetch
+from src.email_fetcher.email_fetcher_api import gmail_fetch, fetcher_temp_path
 from src.summarizer.summarizer import run_summarizer, save_script
 from src.podcast_generator.podcast_generater import gen_podcast
 from src.utils.mails_sorter import MailSorter
 import gradio as gr
 import json
+import shutil
 
 def sort_emails() -> Dict[str, List[str]]:
     """运行邮件分类并返回结果"""
@@ -180,6 +181,17 @@ def generate_audio_step() -> Tuple[str, str]:
     except Exception as e:
         return f"播客音频生成失败：{str(e)}", None
 
+def delete_local_emails() -> str:
+    """删除本地下载的邮件"""
+    try:
+        if os.path.exists(fetcher_temp_path):
+            shutil.rmtree(fetcher_temp_path)
+            os.makedirs(fetcher_temp_path)  # 重新创建空目录
+            return "成功删除本地邮件！"
+        return "没有找到本地邮件目录。"
+    except Exception as e:
+        return f"删除邮件时出错：{str(e)}"
+
 # Create a simplified version of the Gradio interface
 with gr.Blocks(title="Email to Podcast Generator") as demo:
     gr.Markdown("# Email to Podcast Generator")
@@ -214,6 +226,7 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
                     )
                     topic = gr.Textbox(label="Podcast Topic", value="news, tech blogs, Job alerts")
                     run_btn = gr.Button("Generate Podcast", variant="primary")
+                    delete_btn = gr.Button("删除本地邮件", variant="secondary")
                 
                 with gr.Column():
                     status_output = gr.Textbox(label="Status", lines=10)
@@ -234,6 +247,7 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
                         label="Email Query",
                         value='("job alert" OR "medium" OR "联合早报" OR "eCHO") newer_than:3d'
                     )
+                    step1_delete_btn = gr.Button("删除本地邮件", variant="secondary")
                     step1_btn = gr.Button("1. 获取邮件", variant="primary")
                     step1_output = gr.Textbox(label="步骤 1 状态", lines=2)
 
@@ -269,10 +283,23 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
         ]
     )
 
+    # 添加删除邮件按钮的事件处理
+    delete_btn.click(
+        fn=delete_local_emails,
+        inputs=[],
+        outputs=[status_output]
+    )
+
     # 单步执行的按钮事件
     step1_btn.click(
         fn=fetch_emails_step,
         inputs=[step1_user_id, step1_query],
+        outputs=[step1_output]
+    )
+
+    step1_delete_btn.click(
+        fn=delete_local_emails,
+        inputs=[],
         outputs=[step1_output]
     )
 
