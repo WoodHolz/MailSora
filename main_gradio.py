@@ -86,17 +86,29 @@ def run_pipeline(user_id_input: str, query_input: str, topic_input: str):
         script = run_summarizer(topic_input)
         returned_path = save_script(script)
         script_path = None
+        script_content = script  # 保存脚本内容
         
+        # 处理脚本文件路径
         if isinstance(returned_path, str) and os.path.exists(returned_path):
             script_path = returned_path
-            status_messages.append(f"Podcast script generated and saved to {script_path}!")
+            # 读取保存的文件内容
+            with open(script_path, 'r', encoding='utf-8') as f:
+                script_content = f.read()
         else:
             potential_script_path = os.path.join("temp", "podcast_script.txt")
             if os.path.exists(potential_script_path):
                 script_path = potential_script_path
-                status_messages.append(f"Podcast script generated and saved to {script_path}! (Path inferred)")
+                # 读取保存的文件内容
+                with open(script_path, 'r', encoding='utf-8') as f:
+                    script_content = f.read()
             else:
-                status_messages.append("Podcast script generated, but path not confirmed or file not found.")
+                # 如果找不到文件，尝试直接保存脚本内容
+                script_path = os.path.join("temp", "podcast_script.txt")
+                os.makedirs(os.path.dirname(script_path), exist_ok=True)
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(script)
+        
+        status_messages.append(f"Podcast script generated and saved to {script_path}!")
 
         status_messages.append("\nStarting audio generation...")
         gen_podcast()
@@ -119,11 +131,15 @@ def run_pipeline(user_id_input: str, query_input: str, topic_input: str):
             else:
                 status_messages.append(f"Audio generation complete, but temp directory '{temp_dir}' not found.")
                 
-        # Return the results - simplify this to avoid complex return types
+        # Return the results
         result = "\n".join(status_messages)
-        return result, output_audio_path, script_path
+        
+        return result, output_audio_path, script_content
+            
     except Exception as e:
-        return f"Error during processing: {str(e)}", None, None
+        error_msg = f"Error during processing: {str(e)}"
+        print(error_msg)  # 打印错误信息以便调试
+        return error_msg, None, None
 
 # Create a simplified version of the Gradio interface
 with gr.Blocks(title="Email to Podcast Generator") as demo:
@@ -163,7 +179,12 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
                 with gr.Column():
                     status_output = gr.Textbox(label="Status", lines=10)
                     audio_output = gr.Audio(label="Generated Podcast")
-                    file_output = gr.File(label="Generated Script")
+                    # 改用 Textbox 显示脚本内容
+                    script_output = gr.Textbox(
+                        label="Generated Script",
+                        lines=15,
+                        placeholder="生成的播客文稿将显示在这里..."
+                    )
     
     # 设置按钮点击事件
     classify_btn.click(
@@ -175,7 +196,7 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
     run_btn.click(
         fn=run_pipeline,
         inputs=[user_id, query, topic],
-        outputs=[status_output, audio_output, file_output]
+        outputs=[status_output, audio_output, script_output]
     )
 
 if __name__ == "__main__":
@@ -189,7 +210,7 @@ if __name__ == "__main__":
             simple_interface = gr.Interface(
                 fn=run_pipeline,
                 inputs=["text", "text", "text"],
-                outputs=["text", "audio", "file"],
+                outputs=["text", "audio", "text"],
                 title="Email to Podcast Generator (Simple Mode)"
             )
             simple_interface.launch(share=False)
