@@ -142,6 +142,44 @@ def run_pipeline(user_id_input: str, query_input: str, topic_input: str):
         print(error_msg)  # 打印错误信息以便调试
         return error_msg, None, None, None, None
 
+def fetch_emails_step(user_id_input: str, query_input: str) -> str:
+    """单步执行：获取邮件"""
+    try:
+        gmail_fetch(user_id_input, query_input)
+        return "邮件获取成功！邮件已保存到 temp/mails 目录。"
+    except Exception as e:
+        return f"邮件获取失败：{str(e)}"
+
+def generate_script_step(topic_input: str) -> Tuple[str, str]:
+    """单步执行：生成文稿"""
+    try:
+        script = run_summarizer(topic_input)
+        script_path = save_script(script)
+        return "文稿生成成功！", script
+    except Exception as e:
+        return f"文稿生成失败：{str(e)}", ""
+
+def generate_audio_step() -> Tuple[str, str]:
+    """单步执行：生成播客音频"""
+    try:
+        gen_podcast()
+        # 查找生成的音频文件
+        expected_audio_path = os.path.join("temp", "podcast_output.wav")
+        if os.path.exists(expected_audio_path):
+            return "播客音频生成成功！", expected_audio_path
+        
+        # 如果在默认位置找不到，搜索temp目录
+        temp_dir = "temp"
+        if os.path.isdir(temp_dir):
+            wav_files = [f for f in os.listdir(temp_dir) if f.endswith(".wav")]
+            if wav_files:
+                audio_path = os.path.join(temp_dir, wav_files[0])
+                return "播客音频生成成功！", audio_path
+        
+        return "播客音频生成完成，但未找到音频文件。", None
+    except Exception as e:
+        return f"播客音频生成失败：{str(e)}", None
+
 # Create a simplified version of the Gradio interface
 with gr.Blocks(title="Email to Podcast Generator") as demo:
     gr.Markdown("# Email to Podcast Generator")
@@ -180,12 +218,37 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
                 with gr.Column():
                     status_output = gr.Textbox(label="Status", lines=10)
                     audio_output = gr.Audio(label="Generated Podcast")
-                    # 改用 Textbox 显示脚本内容
                     script_output = gr.Textbox(
                         label="Generated Script",
                         lines=15,
                         placeholder="生成的播客文稿将显示在这里..."
                     )
+
+        # 单步执行标签页
+        with gr.Tab("单步执行"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 步骤 1: 获取邮件")
+                    step1_user_id = gr.Textbox(label="User ID", value="me")
+                    step1_query = gr.Textbox(
+                        label="Email Query",
+                        value='("job alert" OR "medium" OR "联合早报" OR "eCHO") newer_than:3d'
+                    )
+                    step1_btn = gr.Button("1. 获取邮件", variant="primary")
+                    step1_output = gr.Textbox(label="步骤 1 状态", lines=2)
+
+                with gr.Column(scale=1):
+                    gr.Markdown("### 步骤 2: 生成文稿")
+                    step2_topic = gr.Textbox(label="Podcast Topic", value="news, tech blogs, Job alerts")
+                    step2_btn = gr.Button("2. 生成文稿", variant="primary")
+                    step2_status = gr.Textbox(label="步骤 2 状态", lines=2)
+                    step2_output = gr.Textbox(label="生成的文稿", lines=10)
+
+                with gr.Column(scale=1):
+                    gr.Markdown("### 步骤 3: 生成播客")
+                    step3_btn = gr.Button("3. 生成播客", variant="primary")
+                    step3_status = gr.Textbox(label="步骤 3 状态", lines=2)
+                    step3_output = gr.Audio(label="生成的播客")
     
     # 设置按钮点击事件
     classify_btn.click(
@@ -194,17 +257,35 @@ with gr.Blocks(title="Email to Podcast Generator") as demo:
         outputs=[classification_output, stats_output]
     )
     
-    # 更新 run_btn 的点击事件，添加对分类结果的更新
     run_btn.click(
         fn=run_pipeline,
         inputs=[user_id, query, topic],
         outputs=[
-            status_output,      # 状态输出
-            audio_output,       # 音频输出
-            script_output,      # 脚本输出
-            classification_output,  # 分类结果
-            stats_output        # 分类统计
+            status_output,
+            audio_output,
+            script_output,
+            classification_output,
+            stats_output
         ]
+    )
+
+    # 单步执行的按钮事件
+    step1_btn.click(
+        fn=fetch_emails_step,
+        inputs=[step1_user_id, step1_query],
+        outputs=[step1_output]
+    )
+
+    step2_btn.click(
+        fn=generate_script_step,
+        inputs=[step2_topic],
+        outputs=[step2_status, step2_output]
+    )
+
+    step3_btn.click(
+        fn=generate_audio_step,
+        inputs=[],
+        outputs=[step3_status, step3_output]
     )
 
 if __name__ == "__main__":
@@ -212,7 +293,6 @@ if __name__ == "__main__":
         demo.launch(share=False)
     except Exception as e:
         print(f"Error launching Gradio: {e}")
-        # Attempt even simpler fallback if needed
         try:
             simple_interface = gr.Interface(
                 fn=run_pipeline,
@@ -224,4 +304,4 @@ if __name__ == "__main__":
         except Exception as e2:
             print(f"Fatal error launching Gradio: {e2}")
             print("Falling back to command line mode")
-            main()  # Run the regular main function as fallback
+            main()
